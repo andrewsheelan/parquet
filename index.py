@@ -4,15 +4,16 @@ import json
 import urllib
 import boto3
 
-print('Loading function')
-
 s3 = boto3.client('s3')
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import csv
+import sys
+import os
+import gzip
+import collections
 
 columns = ['uid', 'controller', 'action', 'params', 'format', 'method', 'path', 'status', 'controller_path', 'created_at', 'duration', 'session', 'headers', 'body', 'api_email']
 
@@ -37,7 +38,7 @@ def convert_file(file_path, converted_file_path):
     for column in columns:
         data[column] = []
 
-    with gzip.open(os.path.join(dirpath, name),'rb') as tsvin:
+    with gzip.open(file_path ,'rb') as tsvin:
         rows = csv.reader(tsvin, delimiter='|')
         for row in rows:
             for index, item in enumerate(row):
@@ -59,9 +60,8 @@ def lambda_handler(event, context):
             upload_path = '/tmp/{}'.format(file_name.split('.')[0] + '.parquet')
             s3.download_file(bucket, key, download_path)
             convert_file(download_path, upload_path)
-            s3_client.upload_file(upload_path, '{}resized'.format(bucket), key)
-            upload_key = 'dataset/month=' + key.split('/')[-4] + '/day=' + key.split('/')[-3] + '/hour=' + key.split('/')[-2] + '/' + key.split('/')[-1].split('.')[0] + '.parquet'
-            response = s3_client.upload_file(upload_path, 's3_requests_converted', upload_key)
+            upload_key = os.environ['DATASETPATH'] + '/dataset/month=' + key.split('/')[-4] + '/day=' + key.split('/')[-3] + '/hour=' + key.split('/')[-2] + '/' + key.split('/')[-1].split('.')[0] + '.parquet'
+            response = s3.upload_file(upload_path, bucket, upload_key)
             print("response: " + response)
             print("upload_key: " + upload_key)
             return True
