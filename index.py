@@ -37,12 +37,24 @@ def convert_file(file_path, converted_file_path):
     data = collections.OrderedDict()
     for column in columns:
         data[column] = []
+        if column == 'params':
+          data['assigned_date'] = []
 
     with gzip.open(file_path ,'rb') as tsvin:
         rows = csv.reader(tsvin, delimiter='|')
         for row in rows:
             for index, item in enumerate(row):
                 data[columns[index]].append(item)
+                if columns[index] == 'params':
+                    try:
+                        parsed_params = json.loads(item)
+                        if parsed_params.has_key('assigned_date'):
+                            # dt = pd.to_datetime(parsed_params['assigned_date'], format="%Y-%m-%d")
+                            data['assigned_date'].append(parsed_params['assigned_date'])
+                        else:
+                            data['assigned_date'] = ''
+                    except:
+                        data['assigned_date'] = ''
 
         df = pd.DataFrame(data)
         table = pa.Table.from_pandas(df)
@@ -60,10 +72,11 @@ def lambda_handler(event, context):
             upload_path = '/tmp/{}'.format(file_name.split('.')[0] + '.parquet')
             s3.download_file(bucket, key, download_path)
             convert_file(download_path, upload_path)
-            upload_key = os.environ['DATASETPATH'] + '/dataset/month=' + key.split('/')[-4] + '/day=' + key.split('/')[-3] + '/hour=' + key.split('/')[-2] + '/' + key.split('/')[-1].split('.')[0] + '.parquet'
-            response = s3.upload_file(upload_path, bucket, upload_key)
-            print("response: " + response)
+	    print("environment variable: {}".format(os.environ['DATASETPATH']))
+	    print("Key variable: {}".format(key))
+	    upload_key = "{}/dataset/month={}/day={}/hour={}/{}.parquet".format(os.environ['DATASETPATH'], key.split('/')[-4], key.split('/')[-3], key.split('/')[-2], file_name.split('.')[0])
             print("upload_key: " + upload_key)
+            s3.upload_file(upload_path, bucket, upload_key)
             return True
         except Exception as e:
             print(e)
